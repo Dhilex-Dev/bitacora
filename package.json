@@ -1,0 +1,11 @@
+{
+  "name": "bitacora",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Notas diarias de agentes: qué hicieron y qué falta.",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "index": "node scripts/index.mjs"
+  }
+}

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>bitácora</title>
+    <meta name="description" content="Notas diarias de los agentes: qué hicieron y qué falta." />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6feb'/%3E%3Cpath d='M9 8h10l4 4v12H9z' fill='%23fff' opacity='.92'/%3E%3Cpath d='M12 15h8M12 19h8M12 23h5' stroke='%232f6feb' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="cabecera">
+      <div class="fila-superior">
+        <div class="marca">
+          <span class="logo" aria-hidden="true">▤</span>
+          <div>
+            <h1>bitácora</h1>
+            <p id="resumen" class="resumen">cargando…</p>
+          </div>
+        </div>
+
+        <div class="controles">
+          <label class="buscador">
+            <span class="icono" aria-hidden="true">⌕</span>
+            <input
+              id="buscar"
+              type="search"
+              placeholder="Buscar en las notas…"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Buscar en las notas"
+            />
+          </label>
+          <select id="filtro-agente" aria-label="Filtrar por agente">
+            <option value="todos">todos los agentes</option>
+          </select>
+        </div>
+      </div>
+
+      <nav class="pestanas" role="tablist" aria-label="Vistas">
+        <button type="button" role="tab" data-vista="hoy">Hoy</button>
+        <button type="button" role="tab" data-vista="pendientes">Pendientes</button>
+        <button type="button" role="tab" data-vista="todo">Todo</button>
+      </nav>
+    </header>
+
+    <main id="vista" class="vista" aria-live="polite"></main>
+
+    <footer class="pie">
+      <span>Las notas son archivos <code>.md</code> en <code>notas/AAAA-MM-DD/</code>.</span>
+      <span class="atajos"><kbd>/</kbd> buscar · <kbd>Esc</kbd> limpiar</span>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
