@@ -6,12 +6,16 @@ ni despliegue.
 
 ## Al terminar una sesión de trabajo, escribe una nota
 
-Crea **un archivo nuevo** en `notas/AAAA-MM-DD/HHMM-<agente>.md`. Usa la fecha y
-la hora reales (24 h, sin `:`), y tu nombre de agente en minúsculas.
+Forma recomendada (crea el archivo con fecha/hora locales y nunca sobrescribe):
 
+```sh
+pnpm run nota -- --agente opencode --tarea "arreglar login" \
+  --proyecto mi-proyecto --hecho "Migré X" --pendiente "Añadir tests"
 ```
-notas/2026-11-01/1812-opencode.md
-```
+
+También puedes crear el archivo a mano en `notas/AAAA-MM-DD/HHMM-<agente>.md`
+(fecha y hora reales, 24 h sin `:`, agente en minúsculas), p. ej.
+`notas/2026-11-01/1812-opencode.md`.
 
 No edites notas de otras sesiones ni de otros agentes. Si necesitas corregir
 algo tuyo del mismo día, crea otra nota; la app las ordena por hora.
@@ -25,6 +29,7 @@ hora: 18:12
 agente: opencode
 tarea: arreglar login con cookies
 estado: hecho
+proyecto: mi-proyecto
 ---
 
 ## Hecho
@@ -42,6 +47,7 @@ Cualquier contexto que no se deduzca del diff.
 Reglas del formato:
 
 - `estado`: `hecho`, `en-curso` o `bloqueado`.
+- `proyecto`: opcional, nombre corto del proyecto relacionado.
 - `tarea`: una línea, imperativo o sustantivo corto. Es el título de la tarjeta.
 - `## Pendiente` usa checkboxes: `- [ ]` abierto, `- [x]` hecho. **La vista
   Pendientes agrega todos los `- [ ]` de todos los días**, así que aquí van las
@@ -62,6 +68,7 @@ Reglas del formato:
 ```sh
 pnpm run dev     # servidor en http://127.0.0.1:4321
 pnpm run index   # genera notas/index.json para servidores estáticos
+pnpm run nota    # crea una nota (recomendado; ver --help)
 ```
 
 ## Verificación rápida

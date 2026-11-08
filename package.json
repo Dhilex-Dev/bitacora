@@ -6,6 +6,7 @@
   "description": "Notas diarias de agentes: qué hicieron y qué falta.",
   "scripts": {
     "dev": "node scripts/serve.mjs",
-    "index": "node scripts/index.mjs"
+    "index": "node scripts/index.mjs",
+    "nota": "node scripts/nota.mjs"
   }
 }

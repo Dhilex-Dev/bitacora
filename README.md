@@ -21,6 +21,16 @@ pnpm run index
 python3 -m http.server 4321
 ```
 
+## Crear notas
+
+```sh
+pnpm run nota -- --agente opencode --tarea "arreglar login" \
+  --proyecto mi-proyecto --hecho "Migré X" --pendiente "Añadir tests"
+```
+
+Usa `--help` para ver opciones. También puedes crear el `.md` a mano (formato
+abajo).
+
 ## Vistas
 
 - **Hoy** — las notas de hoy, agrupadas por tarjeta.
@@ -28,7 +38,9 @@ python3 -m http.server 4321
 - **Todo** — histórico descendente, con filtro por día.
 
 En todas: búsqueda de texto en vivo (`/`), filtro por agente, tema claro/oscuro
-automático.
+automático. Con `pnpm run dev` puedes marcar pendientes desde la UI (escribe en
+el `.md`); en modo estático la vista es de solo lectura. Las notas con formato
+incorrecto muestran avisos.
 
 ## Formato de las notas
 
@@ -41,6 +53,7 @@ hora: 18:12
 agente: opencode
 tarea: crear bitácora v1
 estado: en-curso        # hecho | en-curso | bloqueado
+proyecto: mi-proyecto   # opcional
 ---
 
 ## Hecho
@@ -64,8 +77,9 @@ styles.css      tema claro/oscuro y componentes
 app.js          carga, parseo en cliente, filtros y render
 scripts/
   notes.mjs     lee notas/ y parsea frontmatter + secciones
-  serve.mjs     servidor local; expone /api/notas con el índice al vuelo
+  serve.mjs     servidor local; /api/notas y marcado de pendientes
   index.mjs     escribe notas/index.json para hosting estático
+  nota.mjs      CLI para crear notas
 notas/          una carpeta por día, un .md por nota
 ```
 
@@ -79,6 +93,4 @@ notas/          una carpeta por día, un .md por nota
 
 ## Siguientes pasos posibles
 
-- Marcar pendientes desde la UI (requiere escritura en disco).
-- Resumen diario copiable al portapapeles.
-- Etiquetas o proyectos por nota.
+- Más filtros por proyecto o avisos.

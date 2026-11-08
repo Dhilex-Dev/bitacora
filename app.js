@@ -5,8 +5,11 @@ const estado = {
   vista: vistaDeHash(),
   q: '',
   agente: 'todos',
+  proyecto: 'todos',
   dia: null,
   foco: null,
+  modoEstatico: false,
+  apiPendienteOk: true,
 }
 
 function vistaDeHash() {
@@ -18,8 +21,20 @@ const el = {
   resumen: document.getElementById('resumen'),
   buscar: document.getElementById('buscar'),
   filtro: document.getElementById('filtro-agente'),
+  filtroProyecto: document.getElementById('filtro-proyecto'),
+  copiarResumen: document.getElementById('copiar-resumen'),
+  mensaje: document.getElementById('mensaje-corto'),
   pestanas: [...document.querySelectorAll('.pestanas button')],
   vista: document.getElementById('vista'),
+}
+
+function mostrarMensajeCorto(texto) {
+  if (!el.mensaje) return
+  el.mensaje.textContent = texto
+  el.mensaje.classList.add('visible')
+  setTimeout(() => {
+    el.mensaje.classList.remove('visible')
+  }, 1800)
 }
 
 /* ---------- utilidades ---------- */
@@ -30,10 +45,17 @@ const esc = (s) =>
 /** Markdown inline mínimo: `code`, **negrita**, *cursiva*, [texto](url). */
 function inline(texto) {
   let salida = esc(texto)
-  salida = salida.replace(/`([^`]+)`/g, '<code>$1</code>')
+  const codigos = []
+  // Extraer código primero para protegerlo
+  salida = salida.replace(/`([^`]+)`/g, (m, p1) => {
+    const idx = codigos.length
+    codigos.push(`<code>${p1}</code>`)
+    return `__CODE_${idx}__`
+  })
   salida = salida.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   salida = salida.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
   salida = salida.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer noopener">$1</a>')
+  salida = salida.replace(/__CODE_(\d+)__/g, (m, i) => codigos[Number(i)])
   return salida
 }
 
@@ -68,7 +90,9 @@ function pendientesDe(nota) {
   const salida = []
   for (const seccion of nota.secciones) {
     for (const bloque of seccion.bloques) {
-      if (bloque.tipo === 'tarea' && !bloque.hecho) salida.push(bloque.texto)
+      if (bloque.tipo === 'tarea' && !bloque.hecho) {
+        salida.push({ texto: bloque.texto, linea: bloque.linea, bloque })
+      }
     }
   }
   return salida
@@ -79,6 +103,7 @@ function textoDeNota(nota) {
     nota.agente,
     nota.tarea,
     nota.estado,
+    nota.proyecto || '',
     ...nota.secciones.flatMap((s) => [s.titulo || '', ...s.bloques.map((b) => b.texto)]),
   ]
     .join(' ')
@@ -91,12 +116,14 @@ async function cargar() {
   const fuentes = ['/api/notas', 'notas/index.json']
   let ultimoError = null
 
-  for (const url of fuentes) {
+  for (let i = 0; i < fuentes.length; i++) {
+    const url = fuentes[i]
     try {
       const res = await fetch(url, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const datos = await res.json()
       estado.notas = Array.isArray(datos.notas) ? datos.notas : []
+      estado.modoEstatico = i === 1
       return
     } catch (error) {
       ultimoError = error
@@ -112,7 +139,15 @@ function notasFiltradas() {
   const q = estado.q.trim().toLowerCase()
   return estado.notas.filter((nota) => {
     if (estado.agente !== 'todos' && nota.agente !== estado.agente) return false
-    if (q && !textoDeNota(nota).includes(q)) return false
+    if (estado.proyecto !== 'todos') {
+      const proyectoNota = nota.proyecto || ''
+      if (proyectoNota !== estado.proyecto) return false
+    }
+    if (q) {
+      const texto = textoDeNota(nota)
+      const proyectoNota = (nota.proyecto || '').toLowerCase()
+      if (!texto.includes(q) && !proyectoNota.includes(q)) return false
+    }
     return true
   })
 }
@@ -128,9 +163,28 @@ function diasDe(notas) {
 
 /* ---------- render ---------- */
 
-function bloqueHTML(bloque) {
+function puedeMarcarPendientes() {
+  if (estado.modoEstatico) return false
+  if (estado.apiPendienteOk === false) return false
+  return true
+}
+
+function bloqueHTML(bloque, nota) {
   if (bloque.tipo === 'tarea') {
-    return `<li class="tarea ${bloque.hecho ? 'hecha' : ''}"><span>${inline(bloque.texto)}</span></li>`
+    const hecho = bloque.hecho ? true : false
+    const linea = bloque.linea
+    const deshabilitado = !puedeMarcarPendientes() || linea === undefined || linea === null
+    const title = deshabilitado
+      ? (estado.modoEstatico || estado.apiPendienteOk === false)
+        ? 'Solo lectura (sin endpoint /api/pendiente disponible)'
+        : 'No se puede marcar este pendiente'
+      : ''
+    return `<li class="tarea ${hecho ? 'hecha' : ''}">
+      <label class="tarea-label">
+        <input type="checkbox" class="tarea-check" data-ruta="${esc(nota?.ruta || '')}" data-linea="${linea}" data-hecho="${hecho ? '1' : '0'}" ${hecho ? 'checked' : ''} ${deshabilitado ? 'disabled' : ''} aria-label="${esc(bloque.texto)}" ${title ? `title="${esc(title)}"` : ''}>
+        <span class="tarea-texto">${inline(bloque.texto)}</span>
+      </label>
+    </li>`
   }
   if (bloque.tipo === 'vineta') return `<li>${inline(bloque.texto)}</li>`
   return `<li class="texto">${inline(bloque.texto)}</li>`
@@ -139,13 +193,15 @@ function bloqueHTML(bloque) {
 function notaHTML(nota) {
   const tono = tonoAgente(nota.agente)
   const estadoClase = nota.estado ? `estado-${nota.estado}` : ''
+  const proyecto = nota.proyecto && String(nota.proyecto).trim() ? nota.proyecto : ''
+  const avisos = Array.isArray(nota.avisos) ? nota.avisos.filter(Boolean) : []
 
   const secciones = nota.secciones
     .map(
       (s) => `
         <section class="seccion">
           ${s.titulo ? `<h4>${esc(s.titulo)}</h4>` : ''}
-          <ul class="bloques">${s.bloques.map(bloqueHTML).join('')}</ul>
+          <ul class="bloques">${s.bloques.map((b) => bloqueHTML(b, nota)).join('')}</ul>
         </section>`,
     )
     .join('')
@@ -157,8 +213,10 @@ function notaHTML(nota) {
           ${nota.tarea ? `<h3 class="nota-titulo">${esc(nota.tarea)}</h3>` : ''}
           <div class="nota-meta">
             <span class="chip"><i class="punto" style="background:hsl(${tono} 62% 52%)"></i>${esc(nota.agente)}</span>
+            ${proyecto ? `<span class="chip chip-proyecto" title="Proyecto">${esc(proyecto)}</span>` : ''}
             ${nota.hora ? `<span>${esc(nota.hora)}</span>` : ''}
             ${nota.estado ? `<span class="estado ${estadoClase}">${esc(nota.estado)}</span>` : ''}
+            ${avisos.length ? `<details class="avisos" title="Avisos de formato"><summary>⚠ ${avisos.length}</summary><ul>${avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></details>` : ''}
           </div>
         </div>
       </div>
@@ -179,6 +237,49 @@ function grupoDiaHTML(fecha, notas) {
 
 function vacioHTML(titulo, detalle) {
   return `<div class="vacio"><strong>${esc(titulo)}</strong>${detalle}</div>`
+}
+
+function generarResumenHoy() {
+  const hoy = hoyISO()
+  const filtradas = notasFiltradas()
+  const deHoy = filtradas.filter((n) => n.fecha === hoy)
+  if (!deHoy.length) return ''
+  const lineas = []
+  lineas.push(`# Resumen ${hoy}`)
+  lineas.push('')
+  for (const nota of deHoy) {
+    const cabecera = `### ${nota.hora || ''} · ${nota.agente || ''}${nota.tarea ? ` · ${nota.tarea}` : ''}${nota.estado ? ` (${nota.estado})` : ''}`
+    lineas.push(cabecera.replace(/\s+·\s+$/g, ''))
+    // Hecho
+    const hechos = []
+    const pendientes = []
+    for (const seccion of nota.secciones || []) {
+      for (const bloque of seccion.bloques || []) {
+        if (bloque.tipo === 'tarea') {
+          if (bloque.hecho) hechos.push(bloque.texto)
+          else pendientes.push(bloque.texto)
+        } else if (seccion.titulo && seccion.titulo.toLowerCase() === 'hecho' && bloque.tipo !== 'tarea') {
+          hechos.push(bloque.texto)
+        } else if (seccion.titulo && seccion.titulo.toLowerCase() === 'pendiente' && bloque.tipo !== 'tarea') {
+          pendientes.push(bloque.texto)
+        }
+      }
+    }
+    if (hechos.length) {
+      lineas.push('**Hecho**')
+      for (const h of hechos) lineas.push(`- ${h}`)
+      lineas.push('')
+    }
+    if (pendientes.length) {
+      lineas.push('**Pendiente**')
+      for (const p of pendientes) lineas.push(`- [ ] ${p}`)
+      lineas.push('')
+    } else if (!hechos.length) {
+      // still include empty sections? but requirement says "Hecho + Pendiente abiertos" - include if exist
+    }
+    lineas.push('')
+  }
+  return lineas.join('\n')
 }
 
 function renderHoy(notas) {
@@ -233,8 +334,12 @@ function renderTodo(notas) {
 function renderPendientes(notas) {
   const filas = []
   for (const nota of notas) {
-    for (const texto of pendientesDe(nota)) {
-      filas.push({ nota, texto })
+    for (const pend of pendientesDe(nota)) {
+      if (typeof pend === 'string') {
+        filas.push({ nota, texto: pend })
+      } else {
+        filas.push({ nota, texto: pend.texto, linea: pend.linea })
+      }
     }
   }
 
@@ -258,18 +363,27 @@ function renderPendientes(notas) {
     .map((fecha) => {
       const items = porDia
         .get(fecha)
-        .map(({ nota, texto }) => {
+        .map((fila) => {
+          const { nota, texto, linea } = fila
           const tono = tonoAgente(nota.agente)
+          const deshabilitado = !puedeMarcarPendientes() || linea === undefined || linea === null
+          const title = deshabilitado
+            ? (estado.modoEstatico || estado.apiPendienteOk === false)
+              ? 'Solo lectura (sin endpoint /api/pendiente disponible)'
+              : 'No se puede marcar este pendiente'
+            : ''
           return `
             <li class="pendiente">
-              <span class="caja" aria-hidden="true"></span>
-              <span class="texto-pendiente">
-                ${inline(texto)}
-                <span class="origen">
-                  <i class="punto" style="background:hsl(${tono} 62% 52%);display:inline-block;margin-right:5px"></i>
-                  ${esc(nota.agente)}${nota.tarea ? ` · ${esc(nota.tarea)}` : ''}${nota.hora ? ` · ${esc(nota.hora)}` : ''}
+              <label class="pendiente-label">
+                <input type="checkbox" class="pendiente-check" data-ruta="${esc(nota.ruta || '')}" data-linea="${linea}" aria-label="${esc(texto)}" ${deshabilitado ? 'disabled' : ''} ${title ? `title="${esc(title)}"` : ''}>
+                <span class="texto-pendiente">
+                  ${inline(texto)}
+                  <span class="origen">
+                    <i class="punto" style="background:hsl(${tono} 62% 52%);display:inline-block;margin-right:5px"></i>
+                    ${esc(nota.agente)}${nota.tarea ? ` · ${esc(nota.tarea)}` : ''}${nota.hora ? ` · ${esc(nota.hora)}` : ''}
+                  </span>
                 </span>
-              </span>
+              </label>
               <button type="button" class="ver" data-abrir="${esc(nota.id)}" data-fecha="${esc(fecha)}">ver nota</button>
             </li>`
         })
@@ -290,6 +404,19 @@ function renderPendientes(notas) {
 function render() {
   const filtradas = notasFiltradas()
   const todosLosPendientes = estado.notas.reduce((n, nota) => n + pendientesDe(nota).length, 0)
+
+  if (el.copiarResumen) {
+    if (estado.vista === 'hoy') {
+      el.copiarResumen.style.display = ''
+    } else {
+      el.copiarResumen.style.display = 'none'
+      if (copiarResumenTimeout) {
+        clearTimeout(copiarResumenTimeout)
+        copiarResumenTimeout = null
+      }
+      el.copiarResumen.textContent = 'Copiar resumen'
+    }
+  }
 
   // contadores de pestañas
   const conteos = {
@@ -336,7 +463,7 @@ function render() {
 /* ---------- eventos ---------- */
 
 function poblarAgentes() {
-  const agentes = [...new Set(estado.notas.map((n) => n.agente))].sort()
+  const agentes = [...new Set(estado.notas.map((n) => n.agente).filter(Boolean))].sort()
   if (estado.agente !== 'todos' && !agentes.includes(estado.agente)) estado.agente = 'todos'
 
   el.filtro.innerHTML =
@@ -345,23 +472,185 @@ function poblarAgentes() {
   el.filtro.value = estado.agente
 }
 
+function poblarProyectos() {
+  const proyectos = [...new Set(estado.notas.map((n) => n.proyecto).filter((p) => p && String(p).trim()))].sort()
+  if (el.filtroProyecto) {
+    if (proyectos.length === 0) {
+      el.filtroProyecto.style.display = 'none'
+      estado.proyecto = 'todos'
+      el.filtroProyecto.value = 'todos'
+      return
+    }
+    el.filtroProyecto.style.display = ''
+    if (estado.proyecto !== 'todos' && !proyectos.includes(estado.proyecto)) estado.proyecto = 'todos'
+    el.filtroProyecto.innerHTML =
+      '<option value="todos">todos los proyectos</option>' +
+      proyectos.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('')
+    el.filtroProyecto.value = estado.proyecto
+  }
+}
+
+let copiarResumenTimeout = null
+
+function guardarPreferencias() {
+  try {
+    localStorage.setItem(
+      'bitacora-pref',
+      JSON.stringify({ agente: estado.agente, proyecto: estado.proyecto }),
+    )
+  } catch {}
+}
+
+function cargarPreferencias() {
+  try {
+    const raw = localStorage.getItem('bitacora-pref')
+    if (!raw) return
+    const datos = JSON.parse(raw)
+    if (datos.agente) estado.agente = datos.agente
+    if (datos.proyecto) estado.proyecto = datos.proyecto
+    estado.q = ''
+    if (el.buscar) el.buscar.value = ''
+  } catch {
+    estado.q = ''
+    if (el.buscar) el.buscar.value = ''
+  }
+}
+
 el.pestanas.forEach((boton) => {
   boton.addEventListener('click', () => {
     estado.vista = boton.dataset.vista
     estado.dia = null
     if (location.hash !== `#${estado.vista}`) location.hash = estado.vista
+    guardarPreferencias()
     render()
   })
 })
 
 el.buscar.addEventListener('input', () => {
   estado.q = el.buscar.value
+  guardarPreferencias()
   render()
 })
 
 el.filtro.addEventListener('change', () => {
   estado.agente = el.filtro.value
+  guardarPreferencias()
   render()
+})
+
+if (el.filtroProyecto) {
+  el.filtroProyecto.addEventListener('change', () => {
+    estado.proyecto = el.filtroProyecto.value
+    guardarPreferencias()
+    render()
+  })
+}
+
+if (el.copiarResumen) {
+  el.copiarResumen.addEventListener('click', async () => {
+    try {
+      const texto = generarResumenHoy()
+      if (!texto) {
+        mostrarMensajeCorto('No hay notas de hoy para resumir')
+        return
+      }
+      try {
+        await navigator.clipboard.writeText(texto)
+      } catch {
+        const ta = document.createElement('textarea')
+        ta.value = texto
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      if (copiarResumenTimeout) {
+        clearTimeout(copiarResumenTimeout)
+      }
+      el.copiarResumen.textContent = 'Copiado'
+      copiarResumenTimeout = setTimeout(() => {
+        el.copiarResumen.textContent = 'Copiar resumen'
+        copiarResumenTimeout = null
+      }, 1200)
+    } catch {
+      mostrarMensajeCorto('No se pudo copiar')
+    }
+  })
+}
+
+el.vista.addEventListener('change', async (evento) => {
+  const check = evento.target.closest('.tarea-check, .pendiente-check')
+  if (!check) return
+  if (check.disabled) return
+  if (estado.modoEstatico || estado.apiPendienteOk === false) {
+    check.checked = !check.checked
+    return
+  }
+
+  const ruta = check.dataset.ruta
+  const linea = check.dataset.linea !== undefined ? Number(check.dataset.linea) : undefined
+  // For tarea-check in notes, we want to mark as done if checked? The checkbox represents the task state - marking done means hecho true
+  const marcarHecho = check.checked
+
+  if (!ruta || linea === undefined || Number.isNaN(linea)) {
+    check.checked = !check.checked
+    return
+  }
+
+  // Optimistic update
+  const previo = JSON.parse(JSON.stringify(estado.notas))
+  // Update local state
+  for (const nota of estado.notas) {
+    if (nota.ruta === ruta) {
+      for (const seccion of nota.secciones || []) {
+        for (const bloque of seccion.bloques || []) {
+          if (bloque.tipo === 'tarea' && bloque.linea === linea) {
+            bloque.hecho = marcarHecho
+          }
+        }
+      }
+    }
+  }
+  render()
+
+  try {
+    const res = await fetch('/api/pendiente', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ruta, linea, hecho: marcarHecho }),
+    })
+    if (res.status === 404 || res.status === 405) {
+      estado.apiPendienteOk = false
+      estado.notas = previo
+      render()
+      mostrarMensajeCorto('Solo lectura: sin endpoint para marcar pendientes')
+      return
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || `HTTP ${res.status}`)
+    }
+    const datos = await res.json().catch(() => ({}))
+    if (datos && datos.nota) {
+      // Actualizar nota completa
+      const idx = estado.notas.findIndex((n) => n.ruta === ruta || n.id === datos.nota.id)
+      if (idx >= 0) {
+        estado.notas[idx] = datos.nota
+      } else {
+        // añadir si no existe
+        estado.notas.push(datos.nota)
+        estado.notas.sort((a, b) => `${b.fecha} ${b.hora}`.localeCompare(`${a.fecha} ${a.hora}`))
+      }
+      poblarAgentes()
+      poblarProyectos()
+      render()
+      return
+    }
+  } catch (error) {
+    estado.notas = previo
+    render()
+    mostrarMensajeCorto('No se pudo actualizar el pendiente')
+  }
 })
 
 el.vista.addEventListener('click', (evento) => {
@@ -410,8 +699,18 @@ document.addEventListener('keydown', (evento) => {
 
 ;(async () => {
   try {
+    cargarPreferencias()
+    if (el.buscar) {
+      el.buscar.value = estado.q || ''
+    }
     await cargar()
     poblarAgentes()
+    poblarProyectos()
+    if (el.filtro) el.filtro.value = estado.agente
+    if (el.filtroProyecto) el.filtroProyecto.value = estado.proyecto
+    if (el.copiarResumen) {
+      el.copiarResumen.textContent = 'Copiar resumen'
+    }
     render()
   } catch (error) {
     el.resumen.textContent = 'error al cargar'

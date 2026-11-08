@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bitácora</title>
+    <title>Bitácora</title>
     <meta name="description" content="Notas diarias de los agentes: qué hicieron y qué falta." />
     <link
       rel="icon"
@@ -37,6 +37,10 @@
           <select id="filtro-agente" aria-label="Filtrar por agente">
             <option value="todos">todos los agentes</option>
           </select>
+          <select id="filtro-proyecto" aria-label="Filtrar por proyecto" style="display:none">
+            <option value="todos">todos los proyectos</option>
+          </select>
+          <button type="button" id="copiar-resumen" class="btn-copiar" title="Copiar resumen del día">Copiar resumen</button>
         </div>
       </div>
 
@@ -47,6 +51,7 @@
       </nav>
     </header>
 
+    <div id="mensaje-corto" class="mensaje-corto" aria-live="polite"></div>
     <main id="vista" class="vista" aria-live="polite"></main>
 
     <footer class="pie">
