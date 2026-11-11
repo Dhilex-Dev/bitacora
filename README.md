@@ -34,7 +34,8 @@ abajo).
 ## Vistas
 
 - **Hoy** — las notas de hoy, agrupadas por tarjeta.
-- **Pendientes** — todos los `- [ ]` abiertos de todas las fechas, con enlace a su nota.
+- **Pendientes** — todos los `- [ ]` abiertos de todas las fechas. Clic en la fila abre la nota; al marcarla se muestra un toast con "Deshacer".
+- **Completados** — todas las tareas marcadas (`- [x]`), agrupadas por día más reciente primero. Desmarcar una la devuelve a Pendientes.
 - **Todo** — histórico descendente, con filtro por día.
 
 En todas: búsqueda de texto en vivo (`/`), filtro por agente, tema claro/oscuro
