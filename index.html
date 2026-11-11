@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bitácora</title>
+    <title>Bitácora</title>
     <meta name="description" content="Notas diarias de los agentes: qué hicieron y qué falta." />
     <link
       rel="icon"
@@ -15,9 +15,12 @@
     <header class="cabecera">
       <div class="fila-superior">
         <div class="marca">
-          <span class="logo" aria-hidden="true">▤</span>
+          <svg class="marca-icono" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="2" y="4" width="16" height="18" rx="2" style="fill:none;stroke:currentColor;stroke-width:1.75;stroke-linejoin:round" />
+            <path d="M6 8h8M6 12h8M6 16h6M20 4v18" style="fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round" />
+          </svg>
           <div>
-            <h1>bitácora</h1>
+            <h1>Bitácora</h1>
             <p id="resumen" class="resumen">cargando…</p>
           </div>
         </div>
@@ -35,19 +38,30 @@
             />
           </label>
           <select id="filtro-agente" aria-label="Filtrar por agente">
-            <option value="todos">todos los agentes</option>
+            <option value="todos">Todos los agentes</option>
           </select>
+          <select id="filtro-proyecto" aria-label="Filtrar por proyecto" style="display:none">
+            <option value="todos">Todos los proyectos</option>
+          </select>
+          <button type="button" id="copiar-resumen" class="btn-copiar" title="Copiar resumen del día">Copiar resumen</button>
         </div>
       </div>
 
       <nav class="pestanas" role="tablist" aria-label="Vistas">
         <button type="button" role="tab" data-vista="hoy">Hoy</button>
         <button type="button" role="tab" data-vista="pendientes">Pendientes</button>
+        <button type="button" role="tab" data-vista="completados">Completados</button>
         <button type="button" role="tab" data-vista="todo">Todo</button>
       </nav>
     </header>
 
+    <div id="mensaje-corto" class="mensaje-corto" aria-live="polite"></div>
     <main id="vista" class="vista" aria-live="polite"></main>
+
+    <div class="toast" id="toast">
+      <span id="toast-texto"></span>
+      <button type="button" id="toast-deshacer">Deshacer</button>
+    </div>
 
     <footer class="pie">
       <span>Las notas son archivos <code>.md</code> en <code>notas/AAAA-MM-DD/</code>.</span>
