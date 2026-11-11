@@ -1,5 +1,7 @@
 node_modules/
-notas/index.json
+# Notas locales: el repo sale vacío
+notas/*
+!notas/.gitkeep
 .DS_Store
 *.log
 
