@@ -2,6 +2,9 @@ node_modules/
 # Notas locales: el repo sale vacío
 notas/*
 !notas/.gitkeep
+!notas/2026-11-10/
+notas/2026-11-10/*
+!notas/2026-11-10/0900-bitacora.md
 .DS_Store
 *.log
 

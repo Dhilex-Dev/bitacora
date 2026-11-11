@@ -13,6 +13,7 @@ const TIPOS = {
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.md': 'text/markdown; charset=utf-8',
+  '.woff2': 'font/woff2',
 }
 
 function json(res, estado, datos) {
@@ -40,6 +41,7 @@ function rutaEstaticaPermitida(pathname) {
   if (pathname === '/' || pathname === '/index.html') return true
   if (pathname === '/styles.css' || pathname === '/app.js') return true
   if (pathname === '/notas/index.json') return true
+  if (/^\/fonts\/[^/]+\.woff2$/.test(pathname)) return true
   return RE_RUTA_NOTA.test(pathname)
 }
 
