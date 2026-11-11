@@ -77,19 +77,25 @@ function hoyISO() {
 }
 
 function fechaLarga(iso) {
-  if (!iso) return 'sin fecha'
+  if (!iso) return 'Sin fecha'
   const d = new Date(`${iso}T12:00:00`)
   if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  const texto = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  return capitalizar(texto)
 }
 
 function etiquetaDia(iso) {
   const hoy = hoyISO()
   const ayer = new Date(Date.now() - 86400000)
   const ayerISO = `${ayer.getFullYear()}-${String(ayer.getMonth() + 1).padStart(2, '0')}-${String(ayer.getDate()).padStart(2, '0')}`
-  if (iso === hoy) return 'hoy'
-  if (iso === ayerISO) return 'ayer'
+  if (iso === hoy) return 'Hoy'
+  if (iso === ayerISO) return 'Ayer'
   return fechaLarga(iso)
+}
+
+function horaActual() {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 function tonoAgente(nombre) {
@@ -214,9 +220,10 @@ function bloqueHTML(bloque, nota) {
   return `<li class="texto">${inline(bloque.texto)}</li>`
 }
 
-function notaHTML(nota) {
+function notaHTML(nota, { timeline = false } = {}) {
   const tono = tonoAgente(nota.agente)
   const estadoClase = nota.estado ? `estado-${nota.estado}` : ''
+  const estadoMarcador = nota.estado ? `marcador-${nota.estado}` : 'marcador-sin-estado'
   const proyecto = nota.proyecto && String(nota.proyecto).trim() ? nota.proyecto : ''
   const avisos = Array.isArray(nota.avisos) ? nota.avisos.filter(Boolean) : []
 
@@ -230,21 +237,38 @@ function notaHTML(nota) {
     )
     .join('')
 
-  return `
-    <article class="nota" id="nota-${esc(nota.id)}">
+  const meta = `
+          <div class="nota-meta">
+            <span class="chip"><i class="punto" style="background:hsl(${tono} 45% 46%)"></i>${esc(nota.agente)}</span>
+            ${proyecto ? `<span class="chip chip-proyecto" title="Proyecto">${esc(proyecto)}</span>` : ''}
+            ${!timeline && nota.hora ? `<span>${esc(nota.hora)}</span>` : ''}
+            ${nota.estado ? `<span class="estado ${estadoClase}">${esc(capitalizar(nota.estado.replace(/-/g, ' ')))}</span>` : ''}
+            ${avisos.length ? `<details class="avisos" title="Avisos de formato"><summary>⚠ ${avisos.length}</summary><ul>${avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></details>` : ''}
+          </div>`
+
+  const cuerpo = `
       <div class="nota-cabecera">
         <div>
           ${nota.tarea ? `<h3 class="nota-titulo">${esc(capitalizar(nota.tarea))}</h3>` : ''}
-          <div class="nota-meta">
-            <span class="chip"><i class="punto" style="background:hsl(${tono} 62% 52%)"></i>${esc(nota.agente)}</span>
-            ${proyecto ? `<span class="chip chip-proyecto" title="Proyecto">${esc(proyecto)}</span>` : ''}
-            ${nota.hora ? `<span>${esc(nota.hora)}</span>` : ''}
-            ${nota.estado ? `<span class="estado ${estadoClase}">${esc(capitalizar(nota.estado.replace(/-/g, ' ')))}</span>` : ''}
-            ${avisos.length ? `<details class="avisos" title="Avisos de formato"><summary>⚠ ${avisos.length}</summary><ul>${avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></details>` : ''}
-          </div>
+          ${meta}
         </div>
       </div>
-      ${secciones || '<p class="texto">Nota vacía.</p>'}
+      ${secciones || '<p class="texto">Nota vacía.</p>'}`
+
+  if (timeline) {
+    return `
+    <div class="linea-tiempo-item">
+      <div class="linea-tiempo-hora">${esc(nota.hora || '—')}</div>
+      <div class="linea-tiempo-eje" aria-hidden="true"><span class="linea-tiempo-marcador ${estadoMarcador}"></span></div>
+      <article class="nota linea-tiempo-nota" id="nota-${esc(nota.id)}">
+        ${cuerpo}
+      </article>
+    </div>`
+  }
+
+  return `
+    <article class="nota" id="nota-${esc(nota.id)}">
+      ${cuerpo}
     </article>`
 }
 
@@ -255,12 +279,54 @@ function grupoDiaHTML(fecha, notas) {
         <h2 class="dia-titulo">${esc(etiquetaDia(fecha))}</h2>
         <span class="contador">${notas.length} nota${notas.length === 1 ? '' : 's'}</span>
       </div>
-      <div class="dia-notas">${notas.map(notaHTML).join('')}</div>
+      <div class="linea-tiempo">${notas.map((n) => notaHTML(n, { timeline: true })).join('')}</div>
     </section>`
 }
 
 function vacioHTML(titulo, detalle) {
   return `<div class="vacio"><strong>${esc(titulo)}</strong>${detalle}</div>`
+}
+
+async function copiarTexto(texto, exito = 'Copiado') {
+  try {
+    await navigator.clipboard.writeText(texto)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = texto
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'absolute'
+    ta.style.left = '-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+  mostrarMensajeCorto(exito)
+}
+
+const COMANDO_NOTA = 'pnpm run nota -- --agente <nombre> --tarea "..."'
+
+function bloqueComandoNota() {
+  return `
+    <div class="comando-vacio">
+      <code>${esc(COMANDO_NOTA)}</code>
+      <button type="button" class="btn-copiar-comando" data-copiar-comando="${esc(COMANDO_NOTA)}">Copiar</button>
+    </div>`
+}
+
+function vacioTimelineHTML(texto, { mostrarComando = false, extra = '' } = {}) {
+  return `
+    <div class="linea-tiempo linea-tiempo-vacia">
+      <div class="linea-tiempo-item">
+        <div class="linea-tiempo-hora">${esc(horaActual())}</div>
+        <div class="linea-tiempo-eje" aria-hidden="true"><span class="linea-tiempo-marcador marcador-hueco"></span></div>
+        <div class="vacio-timeline">
+          <p class="vacio-texto">${texto}</p>
+          ${extra}
+          ${mostrarComando ? bloqueComandoNota() : ''}
+        </div>
+      </div>
+    </div>`
 }
 
 function generarResumenHoy() {
@@ -312,15 +378,13 @@ function renderHoy(notas) {
 
   if (!deHoy.length) {
     const ultima = notas[0]
-    const pista = ultima
-      ? `La última nota es de ${esc(etiquetaDia(ultima.fecha))}.`
-      : 'Todavía no hay ninguna nota. Crea la primera en <code>notas/' + hoy + '/</code>.'
-    return vacioHTML('Sin notas de hoy', `
-      <p>${pista}</p>
-      <p>Para que aparezca una: crea <code>notas/${hoy}/HHMM-agente.md</code> con frontmatter y recarga.</p>`)
+    const extra = ultima
+      ? `<p class="vacio-detalle">La última nota es de ${esc(etiquetaDia(ultima.fecha))}.</p>`
+      : ''
+    return vacioTimelineHTML('Aún no hay notas de hoy', { mostrarComando: true, extra })
   }
 
-  return deHoy.map((n) => notaHTML(n)).join('')
+  return `<div class="linea-tiempo">${deHoy.map((n) => notaHTML(n, { timeline: true })).join('')}</div>`
 }
 
 function renderTodo(notas) {
@@ -343,7 +407,7 @@ function renderTodo(notas) {
       ${fechas
         .map(
           (f) =>
-            `<button type="button" data-dia="${esc(f)}" aria-pressed="${filtro === f}">${esc(capitalizar(etiquetaDia(f)))} · ${dias.get(f).length}</button>`,
+            `<button type="button" data-dia="${esc(f)}" aria-pressed="${filtro === f}">${esc(etiquetaDia(f))} <span class="chip-cuenta">${dias.get(f).length}</span></button>`,
         )
         .join('')}
     </div>`
@@ -383,14 +447,18 @@ function filaPendienteHTML({ nota, texto, linea, hecho, saliendo }) {
       : 'No se puede marcar este pendiente'
     : ''
   const tono = tonoAgente(nota.agente)
-  const origen = `${esc(nota.agente)}${nota.tarea ? ` · ${esc(capitalizar(nota.tarea))}` : ''}${nota.hora ? ` · ${esc(nota.hora)}` : ''}`
+  const partes = [
+    `<span class="origen-parte"><span class="punto" style="background:hsl(${tono} 45% 46%)"></span>${esc(nota.agente || '')}</span>`,
+  ]
+  if (nota.tarea) partes.push(`<span class="origen-parte">${esc(capitalizar(nota.tarea))}</span>`)
+  if (nota.hora) partes.push(`<span class="origen-parte">${esc(nota.hora)}</span>`)
   return `
     <li class="pendiente${hecho ? ' hecho' : ''}${saliendo ? ' saliendo' : ''}" role="button" tabindex="0" data-abrir="${esc(nota.id)}" data-fecha="${esc(nota.fecha)}" aria-label="${esc(texto)}">
       <span class="toque">
         <input type="checkbox" class="pendiente-check" data-ruta="${esc(nota.ruta || '')}" data-linea="${linea}" aria-label="${esc(texto)}" ${hecho ? 'checked' : ''} ${deshabilitado ? 'disabled' : ''} ${title ? `title="${esc(title)}"` : ''}>
       </span>
       <span class="texto-pendiente">${inline(capitalizar(texto))}</span>
-      <span class="origen"><span class="punto" style="background:hsl(${tono} 62% 52%);display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px"></span>${origen}</span>
+      <span class="origen">${partes.join('')}</span>
       <span class="abrir" aria-hidden="true">›</span>
     </li>`
 }
@@ -414,7 +482,7 @@ function listaDiasHTML(filas, { tituloVacio, detalleVacio, unidad }) {
       return `
         <section class="dia">
           <div class="dia-cabecera">
-            <h2 class="dia-titulo">${esc(capitalizar(etiquetaDia(fecha)))}</h2>
+            <h2 class="dia-titulo">${esc(etiquetaDia(fecha))}</h2>
             <span class="contador">${n} ${unidad}${n === 1 ? '' : 's'}</span>
           </div>
           <ul class="lista-pendientes">${items}</ul>
@@ -432,25 +500,27 @@ function renderPendientes(notas) {
     filas.push({ nota, texto: m.texto, linea: m.linea, hecho: true, saliendo: true })
   }
 
-  return listaDiasHTML(filas, {
-    tituloVacio: 'Todo al día',
-    detalleVacio: estado.q
-      ? '<p>Ningún pendiente coincide con la búsqueda.</p>'
-      : '<p>No hay <code>- [ ]</code> abiertos en ninguna nota.</p>',
-    unidad: 'pendiente',
-  })
+  if (!filas.length) {
+    if (estado.q) {
+      return vacioHTML('Sin resultados', '<p>Ningún pendiente coincide con la búsqueda.</p>')
+    }
+    return vacioHTML('Sin pendientes', '<p>No hay tareas abiertas. Las tareas marcadas con <code>- [ ]</code> en las notas aparecerán aquí.</p>')
+  }
+
+  return listaDiasHTML(filas, { unidad: 'pendiente' })
 }
 
 function renderCompletados(notas) {
   const filas = filasDeTareas(notas, true)
 
-  return listaDiasHTML(filas, {
-    tituloVacio: 'Sin completados',
-    detalleVacio: estado.q
-      ? '<p>Ninguna completada coincide con la búsqueda.</p>'
-      : '<p>No hay tareas marcadas como hechas.</p>',
-    unidad: 'completado',
-  })
+  if (!filas.length) {
+    if (estado.q) {
+      return vacioHTML('Sin resultados', '<p>Ninguna tarea completada coincide con la búsqueda.</p>')
+    }
+    return vacioHTML('Sin completados', '<p>Aún no hay tareas marcadas como hechas. Marca una casilla en una nota para verla aquí.</p>')
+  }
+
+  return listaDiasHTML(filas, { unidad: 'completado' })
 }
 
 function render() {
@@ -507,11 +577,16 @@ function render() {
 
   // resumen global
   const ultima = estado.notas[0]
-  el.resumen.textContent = estado.notas.length
-    ? `${estado.notas.length} nota${estado.notas.length === 1 ? '' : 's'} · ${todosLosPendientes} pendiente${
-        todosLosPendientes === 1 ? '' : 's'
-      } · Última: ${ultima ? esc(capitalizar(etiquetaDia(ultima.fecha))) : ''}`
-    : 'sin notas todavía'
+  if (estado.notas.length) {
+    const partes = [
+      `${estado.notas.length} nota${estado.notas.length === 1 ? '' : 's'}`,
+      `${todosLosPendientes} pendiente${todosLosPendientes === 1 ? '' : 's'}`,
+    ]
+    if (ultima) partes.push(`Última nota: ${etiquetaDia(ultima.fecha)}`)
+    el.resumen.innerHTML = partes.map((p) => `<span class="resumen-dato">${esc(p)}</span>`).join('')
+  } else {
+    el.resumen.innerHTML = '<span class="resumen-dato">Sin notas todavía</span>'
+  }
 
   // foco sobre una nota concreta
   if (estado.foco) {
@@ -792,7 +867,13 @@ el.vista.addEventListener('change', async (evento) => {
   await aplicarCambioPendiente(ruta, linea, marcarHecho, desdeVista)
 })
 
-el.vista.addEventListener('click', (evento) => {
+el.vista.addEventListener('click', async (evento) => {
+  const copiar = evento.target.closest('[data-copiar-comando]')
+  if (copiar) {
+    evento.preventDefault()
+    await copiarTexto(copiar.dataset.copiarComando || COMANDO_NOTA, 'Comando copiado')
+    return
+  }
   if (evento.target.closest('input[type="checkbox"]')) return
   const chipDia = evento.target.closest('[data-dia]')
   if (chipDia) {
