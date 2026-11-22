@@ -12,3 +12,5 @@ notas/2026-11-10/*
 .agents/
 .claude/
 skills-lock.json
+# Tareas locales de sesiones de agentes
+TODO.md
